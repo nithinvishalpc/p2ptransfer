@@ -37,6 +37,13 @@ function initPeer() {
         myIdEl.textContent = id;
         generateQRCode(id);
         updateStatus('waiting', 'Waiting for connection...');
+        
+        // Check for ID in URL hash for instant pairing
+        const hashId = window.location.hash.substring(1);
+        if (hashId && hashId !== id) {
+            remoteIdInput.value = hashId;
+            setTimeout(() => connectBtn.click(), 500);
+        }
     });
 
     peer.on('connection', (connection) => {
@@ -60,8 +67,9 @@ function initPeer() {
 // Generate QR Code
 function generateQRCode(id) {
     qrcodeEl.innerHTML = '';
+    const url = `${window.location.origin}${window.location.pathname}#${id}`;
     new QRCode(qrcodeEl, {
-        text: id,
+        text: url,
         width: 128,
         height: 128
     });
