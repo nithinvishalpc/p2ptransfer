@@ -1,8 +1,10 @@
 import { state } from './state.js';
-import { DOM, updateStatus, enableFeatures, displayReceivedText } from './ui.js';
+import { DOM, updateStatus, enableFeatures, displayReceivedText, showToast } from './ui.js';
 import { generateQRCode, requestWakeLock } from './utils.js';
-import { handleFileChunk, handleFileMetadata, handleTransferCancelled, cancelTransfer, handleFileAck } from './transfer.js';
+import { handleFileChunk, handleFileStart, handleTransferCancelled, cancelTransfer, handleFileAccept, handleChunkAck, handleResumeRequest, handleFileComplete } from './transfer.js';
 import { MSG } from './constants.js';
+
+let visibilityListenerRegistered = false;
 
 export function initPeer() {
     const randomId = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -29,7 +31,7 @@ export function initPeer() {
     });
 
     state.peer.on('connection', (connection) => {
-        if (state.conn) {
+        if (state.conn && (state.pendingConnection || state.conn.open)) {
             connection.close();
             return;
         }
@@ -51,22 +53,27 @@ export function initPeer() {
     });
 
     // Re-request wake lock if tab becomes visible again
-    document.addEventListener('visibilitychange', async () => {
-        if (state.wakeLock !== null && document.visibilityState === 'visible') {
-            await requestWakeLock(state);
-        }
-    });
+    if (!visibilityListenerRegistered) {
+        visibilityListenerRegistered = true;
+        document.addEventListener('visibilitychange', async () => {
+            if (state.wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock(state);
+            }
+        });
+    }
 }
 
 export function setupConnection(connection) {
     state.conn = connection;
+    state.pendingConnection = true;
 
     state.conn.on('open', () => {
+        state.pendingConnection = false;
         updateStatus('connected', 'Connected');
         enableFeatures(true);
 
         if (window.location.hash) {
-            history.replaceState(null, null, ' ');
+            history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
         }
     });
 
@@ -75,6 +82,7 @@ export function setupConnection(connection) {
     });
 
     state.conn.on('close', () => {
+        state.pendingConnection = false;
         updateStatus('disconnected', 'Connection closed');
         enableFeatures(false);
         state.conn = null;
@@ -82,27 +90,30 @@ export function setupConnection(connection) {
     });
 
     state.conn.on('error', (err) => {
+        state.pendingConnection = false;
         console.error('Connection error:', err);
         updateStatus('disconnected', 'Connection error');
+        cancelTransfer('Connection error.');
     });
 }
 
 function handleIncomingData(data) {
-    if (data instanceof ArrayBuffer) {
-        handleFileChunk(data);
-        return;
-    }
-
-    if (typeof data === 'object') {
+    if (data && typeof data === 'object') {
         if (data.type === MSG.TEXT) {
             displayReceivedText(data.content);
-        } else if (data.type === MSG.FILE_META) {
-            handleFileMetadata(data);
-        } else if (data.type === MSG.FILE_ACK) {
-            handleFileAck();
+        } else if (data.type === MSG.FILE_START) {
+            handleFileStart(data);
+        } else if (data.type === MSG.FILE_ACCEPT) {
+            handleFileAccept(data);
+        } else if (data.type === MSG.FILE_CHUNK) {
+            handleFileChunk(data);
+        } else if (data.type === MSG.CHUNK_ACK) {
+            handleChunkAck(data);
         } else if (data.type === MSG.FILE_COMPLETE) {
-            // Optional: receiver acknowledged full receipt.
-            console.log("Peer confirmed file completion");
+            showToast('Peer confirmed completion');
+            handleFileComplete(data);
+        } else if (data.type === MSG.FILE_RESUME_REQUEST) {
+            handleResumeRequest(data);
         } else if (data.type === MSG.TRANSFER_CANCEL) {
             handleTransferCancelled();
         }

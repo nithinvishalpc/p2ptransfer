@@ -16,6 +16,7 @@ export const DOM = {
     transferInfo: document.getElementById('transfer-info'),
     queueStatus: document.getElementById('queue-status'),
     fileNameDisplay: document.getElementById('file-name-display'),
+    telemetryDisplay: document.getElementById('telemetry-display'),
     progressBar: document.getElementById('progress-bar'),
     progressPercent: document.getElementById('progress-percent'),
     cancelTransferBtn: document.getElementById('cancel-transfer-btn'),
@@ -25,7 +26,9 @@ export const DOM = {
     incomingFileName: document.getElementById('incoming-file-name'),
     incomingFileSizeDisplay: document.getElementById('incoming-file-size-display'),
     acceptSaveBtn: document.getElementById('accept-save-btn'),
-    declineFileBtn: document.getElementById('decline-file-btn')
+    declineFileBtn: document.getElementById('decline-file-btn'),
+    statusBanner: document.getElementById('status-banner'),
+    toastContainer: document.getElementById('toast-container')
 };
 
 export function updateStatus(stateStr, message) {
@@ -63,4 +66,28 @@ export function updateProgress(percent) {
 export function updateQueueUI(count) {
     DOM.transferInfo.classList.remove('hidden');
     DOM.queueStatus.textContent = count > 1 ? `Queue: ${count} files remaining` : '';
+}
+
+export function showBanner(level, message) {
+    DOM.statusBanner.textContent = message;
+    DOM.statusBanner.className = `status-banner ${level}`;
+}
+
+export function clearBanner() {
+    DOM.statusBanner.textContent = '';
+    DOM.statusBanner.className = 'status-banner hidden';
+}
+
+export function showToast(message, ttl = 2500) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    DOM.toastContainer.appendChild(toast);
+    setTimeout(() => {
+        toast.remove();
+    }, ttl);
+}
+
+export function updateTelemetry(speedText, etaText) {
+    DOM.telemetryDisplay.textContent = speedText ? `${speedText} ${etaText ? ` | ${etaText}` : ''}` : '';
 }

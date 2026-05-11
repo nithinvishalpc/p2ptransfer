@@ -1,5 +1,5 @@
 export function formatBytes(bytes, decimals = 2) {
-    if (bytes === 0) return '0 Bytes';
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 Bytes';
     const k = 1024;
     const dm = decimals < 0 ? 0 : decimals;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
@@ -23,11 +23,14 @@ export async function requestWakeLock(state) {
     }
 }
 
-export function releaseWakeLock(state) {
-    if (state.wakeLock) {
-        state.wakeLock.release().then(() => {
-            state.wakeLock = null;
-        });
+export async function releaseWakeLock(state) {
+    if (!state.wakeLock) return;
+    try {
+        await state.wakeLock.release();
+    } catch (_err) {
+        // no-op
+    } finally {
+        state.wakeLock = null;
     }
 }
 
@@ -53,4 +56,15 @@ export async function calculateHash(fileOrBuffer) {
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     return hashHex;
+}
+
+export function formatDuration(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '';
+    const s = Math.max(0, Math.round(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const rem = s % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${rem}s`;
+    return `${rem}s`;
 }

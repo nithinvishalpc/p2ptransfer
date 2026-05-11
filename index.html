@@ -1,101 +1,127 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>P2P Transfer - Serverless & Private</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
-    <!-- PeerJS CDN -->
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <!-- QRCode.js CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>P2P Transfer</h1>
-            <p class="subtitle">Secure, Serverless, Browser-to-Browser</p>
-            <button id="enable-notifications" class="btn-small hidden">🔔 Enable Notifications</button>
+    <div class="ambient" aria-hidden="true">
+        <span class="glow glow-a"></span>
+        <span class="glow glow-b"></span>
+        <span class="grid"></span>
+    </div>
+
+    <div class="app-shell">
+        <header class="hero reveal" style="--delay: 0ms;">
+            <div>
+                <p class="eyebrow">Private Browser Relay</p>
+                <h1>P2P Transfer</h1>
+                <p class="subtitle">Secure, serverless, browser-to-browser transfer with end-to-end direct connectivity.</p>
+            </div>
+            <div class="hero-actions">
+                <button id="theme-toggle" class="btn-ghost" type="button" aria-label="Toggle theme" title="Toggle theme">
+                    <svg id="theme-icon-moon" class="theme-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>
+                    <svg id="theme-icon-sun" class="theme-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+                </button>
+                <button id="enable-notifications" class="btn-small hidden" type="button">Bell Enable Notifications</button>
+            </div>
         </header>
 
         <main>
-            <!-- Connection Management -->
-            <section id="connection-section" class="card">
-                <h2>1. Connect Devices</h2>
-                <div class="connection-status">
-                    Status: <span id="status" class="status-waiting">Waiting...</span>
-                    <button id="refresh-conn-btn" class="btn-refresh hidden" title="Refresh Connection">🔄 Refresh</button>
-                </div>
-                
-                <div class="id-display">
-                    <p>Your Peer ID:</p>
-                    <div class="id-row">
-                        <code id="my-id">Generating...</code>
-                        <button id="copy-id-btn" title="Copy ID">📋</button>
-                    </div>
-                    <div id="qrcode-container">
-                        <div id="qrcode"></div>
-                        <p class="small">Scan to pair on mobile</p>
-                    </div>
-                </div>
+            <div id="status-banner" class="status-banner hidden reveal" style="--delay: 80ms;"></div>
+            <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-                <div class="pairing-input">
-                    <p>Connect to a Peer:</p>
-                    <div class="input-row">
-                        <input type="text" id="remote-id" placeholder="Enter Peer ID...">
-                        <button id="connect-btn">Connect</button>
+            <div class="side-by-side-layout reveal" style="--delay: 120ms;">
+                <section id="connection-section" class="card">
+                    <div class="section-head">
+                        <h2>Connect Devices</h2>
+                        <div class="connection-status">Status <span id="status" class="status-waiting">Waiting...</span></div>
+                        <button id="refresh-conn-btn" class="btn-refresh hidden" title="Refresh Connection" type="button">Refresh</button>
                     </div>
-                </div>
-            </section>
 
-            <!-- Text Transfer -->
-            <section id="text-section" class="card disabled">
-                <h2>2. Text Transfer</h2>
+                    <div class="id-display">
+                        <p class="small strong">Your Peer ID</p>
+                        <div class="id-row">
+                            <code id="my-id">Generating...</code>
+                            <button id="copy-id-btn" class="icon-btn" title="Copy ID" type="button">Copy</button>
+                        </div>
+                        <div id="qrcode-container">
+                            <div id="qrcode"></div>
+                            <p class="small">Scan to pair on mobile</p>
+                        </div>
+                    </div>
+
+                    <div class="pairing-input">
+                        <p class="small strong">Connect to a Peer</p>
+                        <div class="input-row">
+                            <input type="text" id="remote-id" placeholder="Enter Peer ID...">
+                            <button id="connect-btn" type="button">Connect</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="file-section" class="card disabled">
+                    <div class="section-head">
+                        <h2>File Transfer</h2>
+                    </div>
+                    <div id="drop-zone" class="drop-zone">
+                        <p>Drag and drop files here or click to select</p>
+                        <input type="file" id="file-input" multiple hidden>
+                    </div>
+
+                    <div id="accept-file-overlay" class="hidden overlay-card">
+                        <p>Incoming file <strong id="incoming-file-name"></strong></p>
+                        <p class="small" id="incoming-file-size-display"></p>
+                        <div class="overlay-buttons">
+                            <button id="accept-save-btn" type="button">Accept and Save</button>
+                            <button id="decline-file-btn" class="btn-danger" type="button">Decline</button>
+                        </div>
+                    </div>
+
+                    <div id="transfer-info" class="hidden">
+                        <p id="queue-status" class="small"></p>
+                        <p id="file-name-display"></p>
+                        <p id="telemetry-display" class="small"></p>
+                        <div class="progress-container">
+                            <div id="progress-bar" class="progress-bar"></div>
+                        </div>
+                        <div class="transfer-controls">
+                            <span id="progress-percent">0%</span>
+                            <button id="cancel-transfer-btn" class="btn-danger" type="button">Stop Transfer</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <section id="text-section" class="card disabled reveal" style="--delay: 180ms;">
+                <div class="section-head">
+                    <h2>Text Transfer</h2>
+                </div>
                 <div class="text-input-area">
                     <textarea id="text-input" placeholder="Type or paste text here..."></textarea>
-                    <button id="send-text-btn">Send Text</button>
+                    <button id="send-text-btn" type="button">Send Text</button>
                 </div>
                 <div class="text-output-area">
-                    <p>Received Text:</p>
+                    <p class="small strong">Received Text</p>
                     <div id="received-text" class="placeholder-box">No text received yet.</div>
-                    <button id="copy-text-btn">Copy to Clipboard</button>
-                </div>
-            </section>
-
-            <!-- File Transfer -->
-            <section id="file-section" class="card disabled">
-                <h2>3. File Transfer</h2>
-                <div id="drop-zone" class="drop-zone">
-                    <p>Drag & Drop files here or click to select</p>
-                    <input type="file" id="file-input" multiple hidden>
-                </div>
-
-                <!-- Accept File Overlay -->
-                <div id="accept-file-overlay" class="hidden overlay-card">
-                    <p>Incoming file: <strong id="incoming-file-name"></strong></p>
-                    <p class="small" id="incoming-file-size-display"></p>
-                    <div class="overlay-buttons">
-                        <button id="accept-save-btn">Accept & Save</button>
-                        <button id="decline-file-btn" class="btn-danger">Decline</button>
-                    </div>
-                </div>
-
-                <div id="transfer-info" class="hidden">
-                    <p id="queue-status" class="small"></p>
-                    <p id="file-name-display"></p>
-                    <div class="progress-container">
-                        <div id="progress-bar" class="progress-bar"></div>
-                    </div>
-                    <div class="transfer-controls">
-                        <span id="progress-percent">0%</span>
-                        <button id="cancel-transfer-btn" class="btn-danger">Stop Transfer</button>
-                    </div>
+                    <button id="copy-text-btn" type="button">Copy to Clipboard</button>
                 </div>
             </section>
         </main>
 
-        <footer>
-            <p>Powered by WebRTC & PeerJS. No data is stored on any server.</p>
+        <footer class="reveal" style="--delay: 300ms;">
+            <p>Powered by WebRTC and PeerJS. No data is stored on any server.</p>
         </footer>
     </div>
     <script type="module" src="app.js"></script>
