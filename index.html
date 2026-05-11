@@ -65,14 +65,18 @@
                 <h2>3. File Transfer</h2>
                 <div id="drop-zone" class="drop-zone">
                     <p>Drag & Drop files here or click to select</p>
-                    <input type="file" id="file-input" hidden>
+                    <input type="file" id="file-input" multiple hidden>
                 </div>
                 <div id="transfer-info" class="hidden">
+                    <p id="queue-status" class="small"></p>
                     <p id="file-name-display"></p>
                     <div class="progress-container">
                         <div id="progress-bar" class="progress-bar"></div>
                     </div>
-                    <p id="progress-percent">0%</p>
+                    <div class="transfer-controls">
+                        <span id="progress-percent">0%</span>
+                        <button id="cancel-transfer-btn" class="btn-danger">Stop Transfer</button>
+                    </div>
                 </div>
             </section>
         </main>

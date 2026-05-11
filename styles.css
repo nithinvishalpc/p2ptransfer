@@ -179,6 +179,29 @@ button:hover {
     display: none;
 }
 
+.transfer-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 5px;
+}
+
+.btn-danger {
+    background-color: var(--status-disconnected);
+    padding: 5px 10px;
+    font-size: 0.85em;
+}
+
+.btn-danger:hover {
+    background-color: #c0392b;
+}
+
+#queue-status {
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
 .progress-container {
     width: 100%;
     background-color: #eee;

@@ -16,17 +16,33 @@ const fileSection = document.getElementById('file-section');
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const transferInfo = document.getElementById('transfer-info');
+const queueStatus = document.getElementById('queue-status');
 const fileNameDisplay = document.getElementById('file-name-display');
 const progressBar = document.getElementById('progress-bar');
 const progressPercent = document.getElementById('progress-percent');
+const cancelTransferBtn = document.getElementById('cancel-transfer-btn');
 
 // PeerJS Instance
 let peer = null;
 let conn = null;
+let wakeLock = null;
+
+// File Transfer State
+const CHUNK_SIZE = 65536; // 64KB chunks
+const BUFFER_THRESHOLD = 1048576; // 1MB high water mark
+let fileQueue = [];
+let isTransferring = false;
+let isCancelled = false;
+let receivingFile = {
+    name: '',
+    size: 0,
+    totalChunks: 0,
+    chunksReceived: 0,
+    data: []
+};
 
 // Initialize Peer
 function initPeer() {
-    // Generate a random 6-character alphanumeric ID for readability
     const randomId = Math.random().toString(36).substring(2, 8).toUpperCase();
     
     peer = new Peer(randomId, {
@@ -38,7 +54,6 @@ function initPeer() {
         generateQRCode(id);
         updateStatus('waiting', 'Waiting for connection...');
         
-        // Check for ID in URL hash for instant pairing
         const hashId = window.location.hash.substring(1);
         if (hashId && hashId !== id) {
             remoteIdInput.value = hashId;
@@ -61,6 +76,13 @@ function initPeer() {
 
     peer.on('disconnected', () => {
         updateStatus('disconnected', 'Disconnected from signaling server.');
+    });
+
+    // Re-request wake lock if tab becomes visible again
+    document.addEventListener('visibilitychange', async () => {
+        if (wakeLock !== null && document.visibilityState === 'visible') {
+            await requestWakeLock();
+        }
     });
 }
 
@@ -92,6 +114,7 @@ function setupConnection(connection) {
         updateStatus('disconnected', 'Connection closed');
         enableFeatures(false);
         conn = null;
+        cancelTransfer();
     });
 
     conn.on('error', (err) => {
@@ -109,6 +132,8 @@ function handleIncomingData(data) {
             handleFileMetadata(data);
         } else if (data.type === 'file-chunk') {
             handleFileChunk(data);
+        } else if (data.type === 'transfer-cancelled') {
+            handleTransferCancelled();
         }
     }
 }
@@ -129,6 +154,24 @@ function enableFeatures(enabled) {
     }
 }
 
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+        }
+    } catch (err) {
+        console.warn('Wake Lock failed:', err);
+    }
+}
+
+function releaseWakeLock() {
+    if (wakeLock) {
+        wakeLock.release().then(() => {
+            wakeLock = null;
+        });
+    }
+}
+
 // Text Transfer Logic
 function sendText() {
     const text = textInput.value.trim();
@@ -144,6 +187,162 @@ function sendText() {
 function displayReceivedText(text) {
     receivedTextEl.textContent = text;
     receivedTextEl.classList.remove('placeholder-box');
+}
+
+// File Transfer Logic
+function handleFileSelect(e) {
+    const files = e.target.files || e.dataTransfer.files;
+    if (files.length > 0 && conn && conn.open) {
+        for (let i = 0; i < files.length; i++) {
+            fileQueue.push(files[i]);
+        }
+        if (!isTransferring) {
+            processQueue();
+        }
+    }
+}
+
+async function processQueue() {
+    isTransferring = true;
+    isCancelled = false;
+    await requestWakeLock();
+
+    while (fileQueue.length > 0 && !isCancelled) {
+        const file = fileQueue.shift();
+        const totalInQueue = fileQueue.length;
+        updateQueueUI(totalInQueue + 1);
+        await sendFile(file);
+    }
+
+    isTransferring = false;
+    transferInfo.classList.add('hidden');
+    releaseWakeLock();
+    
+    if (!isCancelled && !fileQueue.length) {
+        alert('File(s) sent successfully!');
+    }
+}
+
+function updateQueueUI(count) {
+    transferInfo.classList.remove('hidden');
+    queueStatus.textContent = count > 1 ? `Queue: ${count} files remaining` : '';
+}
+
+async function sendFile(file) {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    fileNameDisplay.textContent = `Sending: ${file.name}`;
+    updateProgress(0);
+
+    conn.send({
+        type: 'file-metadata',
+        name: file.name,
+        size: file.size,
+        totalChunks: totalChunks
+    });
+
+    const dataChannel = conn.dataChannel;
+
+    for (let i = 0; i < totalChunks; i++) {
+        if (isCancelled) break;
+
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(file.size, start + CHUNK_SIZE);
+        const chunk = file.slice(start, end);
+        const buffer = await chunk.arrayBuffer();
+
+        // Dynamic Flow Control using bufferedAmount
+        while (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
+            await new Promise(r => setTimeout(r, 50));
+            if (isCancelled) break;
+        }
+
+        if (isCancelled) break;
+
+        conn.send({
+            type: 'file-chunk',
+            index: i,
+            data: buffer
+        });
+
+        if (i % 5 === 0 || i === totalChunks - 1) {
+            updateProgress(((i + 1) / totalChunks) * 100);
+        }
+    }
+}
+
+async function handleFileMetadata(metadata) {
+    receivingFile = {
+        name: metadata.name,
+        size: metadata.size,
+        totalChunks: metadata.totalChunks,
+        chunksReceived: 0,
+        data: new Array(metadata.totalChunks)
+    };
+
+    transferInfo.classList.remove('hidden');
+    queueStatus.textContent = 'Receiving...';
+    fileNameDisplay.textContent = metadata.name;
+    updateProgress(0);
+    await requestWakeLock();
+}
+
+function handleFileChunk(chunk) {
+    if (!receivingFile.name) return;
+
+    receivingFile.data[chunk.index] = chunk.data;
+    receivingFile.chunksReceived++;
+
+    if (receivingFile.chunksReceived % 5 === 0 || receivingFile.chunksReceived === receivingFile.totalChunks) {
+        const progress = (receivingFile.chunksReceived / receivingFile.totalChunks) * 100;
+        updateProgress(progress);
+    }
+
+    if (receivingFile.chunksReceived === receivingFile.totalChunks) {
+        assembleAndDownloadFile();
+    }
+}
+
+function handleTransferCancelled() {
+    receivingFile = { name: '', size: 0, totalChunks: 0, chunksReceived: 0, data: [] };
+    transferInfo.classList.add('hidden');
+    fileQueue = [];
+    isTransferring = false;
+    releaseWakeLock();
+    alert('Peer cancelled the transfer.');
+}
+
+function cancelTransfer() {
+    isCancelled = true;
+    fileQueue = [];
+    if (conn && conn.open) {
+        conn.send({ type: 'transfer-cancelled' });
+    }
+    transferInfo.classList.add('hidden');
+    releaseWakeLock();
+}
+
+function assembleAndDownloadFile() {
+    const blob = new Blob(receivingFile.data);
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = receivingFile.name;
+    a.click();
+    
+    URL.revokeObjectURL(url);
+    
+    setTimeout(() => {
+        transferInfo.classList.add('hidden');
+        receivingFile = { name: '', size: 0, totalChunks: 0, chunksReceived: 0, data: [] };
+        releaseWakeLock();
+    }, 1000);
+}
+
+function updateProgress(percent) {
+    const rounded = Math.round(percent);
+    progressBar.style.width = `${rounded}%`;
+    progressPercent.textContent = `${rounded}%`;
 }
 
 // Event Listeners
@@ -174,117 +373,8 @@ copyTextBtn.addEventListener('click', () => {
     }
 });
 
-// File Transfer State
-const CHUNK_SIZE = 16384; // 16KB chunks
-let receivingFile = {
-    name: '',
-    size: 0,
-    totalChunks: 0,
-    chunksReceived: 0,
-    data: []
-};
+cancelTransferBtn.addEventListener('click', cancelTransfer);
 
-// File Transfer Logic
-function handleFileSelect(e) {
-    const file = e.target.files[0] || e.dataTransfer.files[0];
-    if (file && conn && conn.open) {
-        sendFile(file);
-    }
-}
-
-async function sendFile(file) {
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    
-    // Reset UI
-    transferInfo.classList.remove('hidden');
-    fileNameDisplay.textContent = `Sending: ${file.name}`;
-    updateProgress(0);
-
-    // Send metadata
-    conn.send({
-        type: 'file-metadata',
-        name: file.name,
-        size: file.size,
-        totalChunks: totalChunks
-    });
-
-    // Send chunks
-    for (let i = 0; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(file.size, start + CHUNK_SIZE);
-        const chunk = file.slice(start, end);
-        const buffer = await chunk.arrayBuffer();
-
-        conn.send({
-            type: 'file-chunk',
-            index: i,
-            data: buffer
-        });
-
-        updateProgress(((i + 1) / totalChunks) * 100);
-        
-        // Small delay to prevent flooding the channel and allow UI to breathe
-        if (i % 20 === 0) await new Promise(r => setTimeout(r, 0));
-    }
-
-    setTimeout(() => {
-        transferInfo.classList.add('hidden');
-        alert('File sent successfully!');
-    }, 1000);
-}
-
-function handleFileMetadata(metadata) {
-    receivingFile = {
-        name: metadata.name,
-        size: metadata.size,
-        totalChunks: metadata.totalChunks,
-        chunksReceived: 0,
-        data: new Array(metadata.totalChunks)
-    };
-
-    transferInfo.classList.remove('hidden');
-    fileNameDisplay.textContent = `Receiving: ${metadata.name}`;
-    updateProgress(0);
-}
-
-function handleFileChunk(chunk) {
-    if (!receivingFile.name) return;
-
-    receivingFile.data[chunk.index] = chunk.data;
-    receivingFile.chunksReceived++;
-
-    const progress = (receivingFile.chunksReceived / receivingFile.totalChunks) * 100;
-    updateProgress(progress);
-
-    if (receivingFile.chunksReceived === receivingFile.totalChunks) {
-        assembleAndDownloadFile();
-    }
-}
-
-function assembleAndDownloadFile() {
-    const blob = new Blob(receivingFile.data);
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = receivingFile.name;
-    a.click();
-    
-    URL.revokeObjectURL(url);
-    
-    setTimeout(() => {
-        transferInfo.classList.add('hidden');
-        receivingFile = { name: '', size: 0, totalChunks: 0, chunksReceived: 0, data: [] };
-    }, 1000);
-}
-
-function updateProgress(percent) {
-    const rounded = Math.round(percent);
-    progressBar.style.width = `${rounded}%`;
-    progressPercent.textContent = `${rounded}%`;
-}
-
-// Event Listeners for Files
 dropZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', handleFileSelect);
 
