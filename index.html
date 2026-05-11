@@ -78,6 +78,10 @@
                         <p>Drag and drop files here or click to select</p>
                         <input type="file" id="file-input" multiple hidden>
                     </div>
+                    <div class="checkbox-row reveal" style="--delay: 260ms; display: flex; align-items: center; gap: 8px; margin-top: 12px;">
+                        <input type="checkbox" id="verify-hash-checkbox" style="width: auto; cursor: pointer;">
+                        <label for="verify-hash-checkbox" class="small clickable" style="cursor: pointer;">Verify file integrity (slower on mobile)</label>
+                    </div>
 
                     <div id="accept-file-overlay" class="hidden overlay-card">
                         <p>Incoming file <strong id="incoming-file-name"></strong></p>

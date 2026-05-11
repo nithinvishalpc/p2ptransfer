@@ -98,7 +98,7 @@ async function sendFile(file) {
     }
 
     let expectedHash = null;
-    if (file.size < 500 * 1024 * 1024) {
+    if (DOM.verifyHashCheckbox.checked && file.size < 500 * 1024 * 1024) {
         DOM.fileNameDisplay.textContent = `Calculating Hash: ${file.name}...`;
         expectedHash = await calculateHash(file);
     }

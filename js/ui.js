@@ -27,6 +27,7 @@ export const DOM = {
     incomingFileSizeDisplay: document.getElementById('incoming-file-size-display'),
     acceptSaveBtn: document.getElementById('accept-save-btn'),
     declineFileBtn: document.getElementById('decline-file-btn'),
+    verifyHashCheckbox: document.getElementById('verify-hash-checkbox'),
     statusBanner: document.getElementById('status-banner'),
     toastContainer: document.getElementById('toast-container')
 };
