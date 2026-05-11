@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P Transfer - Serverless & Private</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- PeerJS CDN -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- QRCode.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>P2P Transfer</h1>
+            <p class="subtitle">Secure, Serverless, Browser-to-Browser</p>
+        </header>
+
+        <main>
+            <!-- Connection Management -->
+            <section id="connection-section" class="card">
+                <h2>1. Connect Devices</h2>
+                <div class="connection-status">
+                    Status: <span id="status" class="status-waiting">Waiting...</span>
+                </div>
+                
+                <div class="id-display">
+                    <p>Your Peer ID:</p>
+                    <div class="id-row">
+                        <code id="my-id">Generating...</code>
+                        <button id="copy-id-btn" title="Copy ID">📋</button>
+                    </div>
+                    <div id="qrcode-container">
+                        <div id="qrcode"></div>
+                        <p class="small">Scan to pair on mobile</p>
+                    </div>
+                </div>
+
+                <div class="pairing-input">
+                    <p>Connect to a Peer:</p>
+                    <div class="input-row">
+                        <input type="text" id="remote-id" placeholder="Enter Peer ID...">
+                        <button id="connect-btn">Connect</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Text Transfer -->
+            <section id="text-section" class="card disabled">
+                <h2>2. Text Transfer</h2>
+                <div class="text-input-area">
+                    <textarea id="text-input" placeholder="Type or paste text here..."></textarea>
+                    <button id="send-text-btn">Send Text</button>
+                </div>
+                <div class="text-output-area">
+                    <p>Received Text:</p>
+                    <div id="received-text" class="placeholder-box">No text received yet.</div>
+                    <button id="copy-text-btn">Copy to Clipboard</button>
+                </div>
+            </section>
+
+            <!-- File Transfer -->
+            <section id="file-section" class="card disabled">
+                <h2>3. File Transfer</h2>
+                <div id="drop-zone" class="drop-zone">
+                    <p>Drag & Drop files here or click to select</p>
+                    <input type="file" id="file-input" hidden>
+                </div>
+                <div id="transfer-info" class="hidden">
+                    <p id="file-name-display"></p>
+                    <div class="progress-container">
+                        <div id="progress-bar" class="progress-bar"></div>
+                    </div>
+                    <p id="progress-percent">0%</p>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Powered by WebRTC & PeerJS. No data is stored on any server.</p>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
