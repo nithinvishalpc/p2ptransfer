@@ -1,0 +1,299 @@
+// DOM Elements
+const statusEl = document.getElementById('status');
+const myIdEl = document.getElementById('my-id');
+const copyIdBtn = document.getElementById('copy-id-btn');
+const remoteIdInput = document.getElementById('remote-id');
+const connectBtn = document.getElementById('connect-btn');
+const qrcodeEl = document.getElementById('qrcode');
+
+const textSection = document.getElementById('text-section');
+const textInput = document.getElementById('text-input');
+const sendTextBtn = document.getElementById('send-text-btn');
+const receivedTextEl = document.getElementById('received-text');
+const copyTextBtn = document.getElementById('copy-text-btn');
+
+const fileSection = document.getElementById('file-section');
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const transferInfo = document.getElementById('transfer-info');
+const fileNameDisplay = document.getElementById('file-name-display');
+const progressBar = document.getElementById('progress-bar');
+const progressPercent = document.getElementById('progress-percent');
+
+// PeerJS Instance
+let peer = null;
+let conn = null;
+
+// Initialize Peer
+function initPeer() {
+    // Generate a random 6-character alphanumeric ID for readability
+    const randomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    peer = new Peer(randomId, {
+        debug: 2
+    });
+
+    peer.on('open', (id) => {
+        myIdEl.textContent = id;
+        generateQRCode(id);
+        updateStatus('waiting', 'Waiting for connection...');
+    });
+
+    peer.on('connection', (connection) => {
+        if (conn) {
+            connection.close();
+            return;
+        }
+        setupConnection(connection);
+    });
+
+    peer.on('error', (err) => {
+        console.error('Peer error:', err);
+        updateStatus('disconnected', `Error: ${err.type}`);
+    });
+
+    peer.on('disconnected', () => {
+        updateStatus('disconnected', 'Disconnected from signaling server.');
+    });
+}
+
+// Generate QR Code
+function generateQRCode(id) {
+    qrcodeEl.innerHTML = '';
+    new QRCode(qrcodeEl, {
+        text: id,
+        width: 128,
+        height: 128
+    });
+}
+
+// Setup Connection
+function setupConnection(connection) {
+    conn = connection;
+
+    conn.on('open', () => {
+        updateStatus('connected', 'Connected');
+        enableFeatures(true);
+    });
+
+    conn.on('data', (data) => {
+        handleIncomingData(data);
+    });
+
+    conn.on('close', () => {
+        updateStatus('disconnected', 'Connection closed');
+        enableFeatures(false);
+        conn = null;
+    });
+
+    conn.on('error', (err) => {
+        console.error('Connection error:', err);
+        updateStatus('disconnected', 'Connection error');
+    });
+}
+
+// Handle Incoming Data
+function handleIncomingData(data) {
+    if (typeof data === 'object') {
+        if (data.type === 'text') {
+            displayReceivedText(data.content);
+        } else if (data.type === 'file-metadata') {
+            handleFileMetadata(data);
+        } else if (data.type === 'file-chunk') {
+            handleFileChunk(data);
+        }
+    }
+}
+
+// UI State Management
+function updateStatus(state, message) {
+    statusEl.textContent = message;
+    statusEl.className = `status-${state}`;
+}
+
+function enableFeatures(enabled) {
+    if (enabled) {
+        textSection.classList.remove('disabled');
+        fileSection.classList.remove('disabled');
+    } else {
+        textSection.classList.add('disabled');
+        fileSection.classList.add('disabled');
+    }
+}
+
+// Text Transfer Logic
+function sendText() {
+    const text = textInput.value.trim();
+    if (text && conn && conn.open) {
+        conn.send({
+            type: 'text',
+            content: text
+        });
+        textInput.value = '';
+    }
+}
+
+function displayReceivedText(text) {
+    receivedTextEl.textContent = text;
+    receivedTextEl.classList.remove('placeholder-box');
+}
+
+// Event Listeners
+copyIdBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(myIdEl.textContent);
+    const originalText = copyIdBtn.textContent;
+    copyIdBtn.textContent = '✅';
+    setTimeout(() => copyIdBtn.textContent = originalText, 2000);
+});
+
+connectBtn.addEventListener('click', () => {
+    const remoteId = remoteIdInput.value.trim().toUpperCase();
+    if (remoteId && !conn) {
+        const connection = peer.connect(remoteId, { reliable: true });
+        setupConnection(connection);
+    }
+});
+
+sendTextBtn.addEventListener('click', sendText);
+
+copyTextBtn.addEventListener('click', () => {
+    const text = receivedTextEl.textContent;
+    if (text && text !== 'No text received yet.') {
+        navigator.clipboard.writeText(text);
+        const originalText = copyTextBtn.textContent;
+        copyTextBtn.textContent = 'Copied!';
+        setTimeout(() => copyTextBtn.textContent = originalText, 2000);
+    }
+});
+
+// File Transfer State
+const CHUNK_SIZE = 16384; // 16KB chunks
+let receivingFile = {
+    name: '',
+    size: 0,
+    totalChunks: 0,
+    chunksReceived: 0,
+    data: []
+};
+
+// File Transfer Logic
+function handleFileSelect(e) {
+    const file = e.target.files[0] || e.dataTransfer.files[0];
+    if (file && conn && conn.open) {
+        sendFile(file);
+    }
+}
+
+async function sendFile(file) {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    
+    // Reset UI
+    transferInfo.classList.remove('hidden');
+    fileNameDisplay.textContent = `Sending: ${file.name}`;
+    updateProgress(0);
+
+    // Send metadata
+    conn.send({
+        type: 'file-metadata',
+        name: file.name,
+        size: file.size,
+        totalChunks: totalChunks
+    });
+
+    // Send chunks
+    for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(file.size, start + CHUNK_SIZE);
+        const chunk = file.slice(start, end);
+        const buffer = await chunk.arrayBuffer();
+
+        conn.send({
+            type: 'file-chunk',
+            index: i,
+            data: buffer
+        });
+
+        updateProgress(((i + 1) / totalChunks) * 100);
+        
+        // Small delay to prevent flooding the channel and allow UI to breathe
+        if (i % 20 === 0) await new Promise(r => setTimeout(r, 0));
+    }
+
+    setTimeout(() => {
+        transferInfo.classList.add('hidden');
+        alert('File sent successfully!');
+    }, 1000);
+}
+
+function handleFileMetadata(metadata) {
+    receivingFile = {
+        name: metadata.name,
+        size: metadata.size,
+        totalChunks: metadata.totalChunks,
+        chunksReceived: 0,
+        data: new Array(metadata.totalChunks)
+    };
+
+    transferInfo.classList.remove('hidden');
+    fileNameDisplay.textContent = `Receiving: ${metadata.name}`;
+    updateProgress(0);
+}
+
+function handleFileChunk(chunk) {
+    if (!receivingFile.name) return;
+
+    receivingFile.data[chunk.index] = chunk.data;
+    receivingFile.chunksReceived++;
+
+    const progress = (receivingFile.chunksReceived / receivingFile.totalChunks) * 100;
+    updateProgress(progress);
+
+    if (receivingFile.chunksReceived === receivingFile.totalChunks) {
+        assembleAndDownloadFile();
+    }
+}
+
+function assembleAndDownloadFile() {
+    const blob = new Blob(receivingFile.data);
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = receivingFile.name;
+    a.click();
+    
+    URL.revokeObjectURL(url);
+    
+    setTimeout(() => {
+        transferInfo.classList.add('hidden');
+        receivingFile = { name: '', size: 0, totalChunks: 0, chunksReceived: 0, data: [] };
+    }, 1000);
+}
+
+function updateProgress(percent) {
+    const rounded = Math.round(percent);
+    progressBar.style.width = `${rounded}%`;
+    progressPercent.textContent = `${rounded}%`;
+}
+
+// Event Listeners for Files
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', handleFileSelect);
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    handleFileSelect(e);
+});
+
+// Start initialization
+initPeer();
