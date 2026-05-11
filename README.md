@@ -1,4 +1,4 @@
-# Serverless P2P Transfer Web App
+# S3ndit - Serverless P2P Transfer
 
 A purely static, browser-based application that enables real-time, peer-to-peer (P2P) transfer of text and files between devices. No servers, no logs, just direct communication.
 
