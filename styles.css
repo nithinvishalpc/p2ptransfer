@@ -62,6 +62,19 @@ h2 {
 .connection-status {
     margin-bottom: 15px;
     font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-refresh {
+    background: #f39c12;
+    padding: 5px 10px;
+    font-size: 0.8em;
+}
+
+.btn-refresh:hover {
+    background: #e67e22;
 }
 
 .status-waiting { color: var(--status-waiting); }
@@ -173,6 +186,32 @@ button:hover {
 .drop-zone.dragover {
     background: #d0e7ff;
     border-color: #357abd;
+}
+
+.btn-small {
+    padding: 5px 12px;
+    font-size: 0.8em;
+    margin-top: 10px;
+}
+
+.overlay-card {
+    background: #eef5ff;
+    border: 2px solid var(--primary-color);
+    border-radius: 8px;
+    padding: 15px;
+    margin: 15px 0;
+    text-align: center;
+}
+
+.overlay-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+#accept-save-btn {
+    background-color: var(--status-connected);
 }
 
 .hidden {
